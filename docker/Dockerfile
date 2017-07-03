@@ -35,9 +35,6 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
     && mkdir ~/.vnc \
     && x11vnc -storepasswd 123456789 ~/.vnc/passwd
 
-#COPY protractor.sh /workspace/protractor.sh
-#RUN chmod +x /workspace/protractor.sh
-
 # Fix for the issue with Selenium, as described here:
 # https://github.com/SeleniumHQ/docker-selenium/issues/87
 ENV DBUS_SESSION_BUS_ADDRESS=/dev/null \

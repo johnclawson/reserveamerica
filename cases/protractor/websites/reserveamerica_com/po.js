@@ -7,9 +7,10 @@ function PageObject(){
   this.$campingDate = $("#campingDate");
   this.$lengthOfStay = $("#lengthOfStay");
   this.$searchAvailable = $('#search_avail');
-  this.$calendarViewSwitch = $('#calendar_view_switch');
-  this.$calendar = $('#calendar');
-  this.$next2Weeks = $('#calendar .weeknav.week2');
+  this.calendarLocator = $('#calendar');
+  this.next2WeeksLocator = $('#calendar .weeknav.week2');
+  this.dateRangeAvailabilityLocator = $('#calendar_view_switch');
+  this.sunAvailableLocator = '#calendar td.status.a.sun a';
 }
 
 module.exports = PageObject;

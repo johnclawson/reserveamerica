@@ -8,44 +8,18 @@ LOGFOLDER="logs"
 SELENIUMLOG="selenium.log"
 PROTRACTORVERSION=5.1.1
 
-mkdir $LOGFOLDER
-cd $LOGFOLDER
-touch $SELENIUMLOG
+if [ ! -d "${LOGFOLDER}" ]; then
+  mkdir "${LOGFOLDER}"
+fi
+
+cd "${LOGFOLDER}"
+
+if [ ! -e "${SELENIUMLOG}" ]; then
+    touch "${SELENIUMLOG}"
+fi
+
 cd ..
 
-
-#if [[ ! -z "${IMAGENAME}" ]]; then
-#  IMAGENAME="automation"
-#fi
-#
-#if [[ ! -z "${IMAGEVERSION}" ]]; then
-#  IMAGEVERSION="0.0.1"
-#fi
-#
-#if [[ ! -z "${LOGFOLDER}" ]]; then
-#  LOGFOLDER="logs"
-#fi
-#
-#if [[ ! -z "${SELENIUMLOG}" ]]; then
-#  echo "SELENIUMLOG"
-#  SELENIUMLOG="selenium.log"
-#fi
-#
-#if [ ! -d "${LOGFOLDER}" ]; then
-#  mkdir "${LOGFOLDER}"
-#fi
-#
-#cd "${LOGFOLDER}"
-#
-#if [ ! -e "${SELENIUMLOG}" ]; then
-#    touch "${SELENIUMLOG}"
-#fi
-#
-#cd ..
-#
-#if [[ ! -z "${PROTRACTORVERSION}" ]]; then
-#  PROTRACTORVERSION=5.1.1
-#fi
 
 delete_exist_image() {
     echo "# Delete image ${IMAGENAME}: ${IMAGEVERSION}"
@@ -87,8 +61,8 @@ run_docker_image() {
 }
 
 start() {
-    echo $IMAGE_NAME
-    echo $IMAGE_VERSION
+    echo ${IMAGENAME}
+    echo ${IMAGEVERSION}
     if [[ "$(docker images -q ${IMAGENAME}:${IMAGEVERSION} 2> /dev/null)" == "" ]]; then
         is_previous_docker=0
     else
@@ -109,12 +83,16 @@ start() {
     if [[ $? != 0 ]]; then
         exit $?
     fi
+
+    echo "onlyBuild: ${onlyBuild}"
+
     if [[ "${onlyBuild}" == "false" ]]; then
         run_docker_image
     fi
 }
 
 main() {
+    onlyBuild=false;
     while getopts ":fb" optName "$@"; do
         case ${optName} in
         f)
@@ -130,8 +108,7 @@ main() {
     done
 
     shift $(($OPTIND - 1))
-    # start
-    run_docker_image
+    start
 }
 
 usage() {
