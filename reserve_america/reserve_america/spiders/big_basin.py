@@ -28,7 +28,8 @@ class BigBasinSpider(scrapy.Spider):
         'siteListLabelHref': 'div.siteListLabel a::attr(href)',
         'siteListLabelText': 'div.siteListLabel a::text',
         'siteLoopText': 'div.loopName::text',
-        'siteAvailableHref': 'a::attr(href)'
+        'siteAvailableHref': 'a::attr(href)',
+        'pageNav': '#calendar thead span.pagenav'
     }
 
     first_date = datetime.datetime.strptime('07/29/2017', "%m/%d/%Y").date()
@@ -44,6 +45,10 @@ class BigBasinSpider(scrapy.Spider):
         '&startIdx=0'
     ]
 
+    def __next_page_url(self, page_nav):
+        url = page_nav.xpath('//a[contains(@id, "Next")]/@href').extract_first()
+        return url
+
     def __merge_list(self, source_list, target_list):
         """
         merge two list, and return merged list. make sure you pass list not other type
@@ -51,7 +56,7 @@ class BigBasinSpider(scrapy.Spider):
         :param target_list: list want to be merged to
         :return: merged list
         """
-        target_list = target_list+source_list
+        target_list = target_list + source_list
         return target_list
 
     def __merge_dict(self, source_dict, target_dict):
@@ -106,7 +111,14 @@ class BigBasinSpider(scrapy.Spider):
         return date.strftime(date_format)
 
     def __parse_sites_pages(self, response):
-        return self.__parse_sites_page(response)
+        # parse current page
+        self.__parse_sites_page(response)
+
+        next_page_url = self.__next_page_url(response.css(self.SELECTORS['pageNav']))
+        # # fetch next page
+        if next_page_url:
+            full_url = 'https://www.reserveamerica.com'+next_page_url
+            yield scrapy.Request(url=full_url, callback=self.__parse_sites_pages)
 
     def __parse_site(self, tds, first_date):
         """
@@ -171,8 +183,8 @@ class BigBasinSpider(scrapy.Spider):
                 loop = td.css(self.SELECTORS['siteLoopText']).extract_first()
                 site['loop'] = loop
             else:
-            # reservation information
-                date_str = self.__date_string(self.__offset_date(first_date, index - 2))
+                # reservation information
+                date_str = self.__date_string(self.__offset_date(first_date, index - 2), '')
                 url = td.css(self.SELECTORS['siteAvailableHref']).extract_first()
                 if url:
                     # this date is available for book
@@ -230,7 +242,6 @@ class BigBasinSpider(scrapy.Spider):
             }
         }
         """
-        park = {}
 
         # traverse all sites in currently get page
         sites = response.css(self.SELECTORS['siteItems'])
@@ -239,10 +250,9 @@ class BigBasinSpider(scrapy.Spider):
             site_info = site.css(self.SELECTORS['siteInfo'])
             site_data = self.__parse_site(site_info, self.first_date)
 
-            self.__merge_dict(site_data,park)
-
-        return park
+            self.__merge_dict(site_data, self.park)
 
     def parse(self, response):
-        data = self.__parse_sites_pages(response)
+        self.park = {}
+        self.__parse_sites_pages(response)
         pass
