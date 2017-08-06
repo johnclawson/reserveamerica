@@ -9,12 +9,11 @@ from scrapy.http import Request
 
 
 class BigBasinSpider(CrawlSpider):
-    name = 'big_basin'
+    name = 'reservation'
 
     url_template = 'https://www.reserveamerica.com/campsiteCalendar.do?page=calendar&contractCode=%s&parkId=%d&calarvdate=%s&sitepage=true&startIdx=0'
 
-    logging.getLogger("requests").setLevel(logging.WARNING
-                                           )  # 将requests的日志级别设成WARNING
+    logging.getLogger("requests").setLevel(logging.WARNING)
     logging.basicConfig(
         level=logging.WARNING,
         format=
@@ -30,11 +29,6 @@ class BigBasinSpider(CrawlSpider):
         }
     ]
 
-    # CONST
-    # JSON file store extract information for all parks
-    PARKS = 'parks.json'
-    # JSON file store extract information for all reservations
-    RESERVATIONS = 'reservations.json'
     # All available status for a site, immutable dict
     STATUSES = {
         'a': 'a',
@@ -55,11 +49,8 @@ class BigBasinSpider(CrawlSpider):
         'next_2_weeks': '#calendar thead tr td.week2'
     }
 
-    # first_date = datetime.datetime.strptime('07/29/2017', "%m/%d/%Y").date()
-
     def __init__(self, start_url='', *args, **kwargs):
         self.park = {}
-        self.next_page_url = ''
         self.first_date = self.__offset_date(datetime.datetime.today(), 2)
         self.cookie_index = 0
         super(BigBasinSpider, self).__init__(*args, **kwargs)
@@ -125,6 +116,10 @@ class BigBasinSpider(CrawlSpider):
             date_format = '%m/%d/%Y'
         return date.strftime(date_format)
 
+    def get_calarvdate_from_url(self, url):
+        queries = parse_qs(urlparse(url).query, keep_blank_values=True)
+        return queries['calarvdate']
+
     def has_next_campsite_list(self, response):
         """
         Whether still has more campsite list
@@ -156,14 +151,16 @@ class BigBasinSpider(CrawlSpider):
 
         if next_campsite_list_url:
             logging.warning("+++++++++++++[parse_next_campsite_list] next_campsite_list_url: %s", next_campsite_list_url)
-            yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': self.cookie_index, 'index':self.cookie_index})
+            calarvdate = self.get_calarvdate_from_url(next_campsite_list_url)
+            yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': self.cookie_index, 'index':self.cookie_index, 'first_date':calarvdate})
         else:
             yield None
 
         if next_2_weeks_url:
             logging.warning("=============[parse_2_weeks] next_2_weeks_url: %s", next_2_weeks_url)
             self.cookie_index = self.cookie_index + 1
-            yield Request(url=next_2_weeks_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index})
+            calarvdate = self.get_calarvdate_from_url(next_2_weeks_url)
+            yield Request(url=next_2_weeks_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index, 'first_date':calarvdate})
         else:
             logging.warning("*************[parse_2_weeks] no more next week")
             yield None
@@ -174,7 +171,8 @@ class BigBasinSpider(CrawlSpider):
 
         if next_campsite_list_url:
             logging.warning("+++++++++++++[parse_next_campsite_list] next_campsite_list_url: %s", next_campsite_list_url)
-            yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': response.meta['index'], 'index': response.meta['index']})
+            calarvdate = self.get_calarvdate_from_url(next_campsite_list_url)
+            yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': response.meta['index'], 'index': response.meta['index'], 'first_date':calarvdate})
         else:
             logging.warning("?????????????[parse_next_campsite_list] no more campsite list")
             yield None
@@ -307,19 +305,14 @@ class BigBasinSpider(CrawlSpider):
         # each site is one tr
         for site in sites:
             site_info = site.css(self.SELECTORS['site_info'])
-            site_data = self.parse_campsite(site_info, self.first_date)
+            site_data = self.parse_campsite(site_info, datetime.datetime.strptime(response.meta['first_date'][0], "%m/%d/%Y").date())
 
             self.__merge_dict(site_data, self.park)
-
-    def update_database(self):
-        print('update_database')
-
-    def notify_notification_service(self):
-        print('notify_notification_service')
 
     def start_requests(self):
         while len(self.scrawl_parks):
             park = self.scrawl_parks.pop()
             park_url = self.url_template % (park['contractCode'], park['parkId'], self.first_date.strftime('%m/%d/%Y'))
             logging.warning("=============[parse_2_weeks] next_2_weeks_url: %s", park_url)
-            yield Request(url=park_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index})
+            calarvdate = self.get_calarvdate_from_url(park_url)
+            yield Request(url=park_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index, 'first_date':calarvdate})
