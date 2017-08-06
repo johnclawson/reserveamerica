@@ -1,12 +1,34 @@
 # -*- coding: utf-8 -*-
-import scrapy
 import datetime
 import json
 from urllib.parse import urlparse, parse_qs
+import logging
+
+from scrapy.spiders import CrawlSpider
+from scrapy.http import Request
 
 
-class BigBasinSpider(scrapy.Spider):
+class BigBasinSpider(CrawlSpider):
     name = 'big_basin'
+
+    url_template = 'https://www.reserveamerica.com/campsiteCalendar.do?page=calendar&contractCode=%s&parkId=%d&calarvdate=%s&sitepage=true&startIdx=0'
+
+    logging.getLogger("requests").setLevel(logging.WARNING
+                                           )  # 将requests的日志级别设成WARNING
+    logging.basicConfig(
+        level=logging.WARNING,
+        format=
+        '%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+        datefmt='%a, %d %b %Y %H:%M:%S',
+        filename='scrapy.log',
+        filemode='w')
+
+    scrawl_parks = [
+        {
+            "contractCode": "CA",
+            "parkId": 120009
+        }
+    ]
 
     # CONST
     # JSON file store extract information for all parks
@@ -22,32 +44,25 @@ class BigBasinSpider(scrapy.Spider):
     }
     # css selectors used to extract information from html page
     SELECTORS = {
-        'siteItems': '#calendar tbody tr:not(.separator)',
-        'siteInfo': 'td',
-        'siteMarkTitle': 'a.sitemarker img::attr(title)',
-        'siteListLabelHref': 'div.siteListLabel a::attr(href)',
-        'siteListLabelText': 'div.siteListLabel a::text',
-        'siteLoopText': 'div.loopName::text',
-        'siteAvailableHref': 'a::attr(href)',
-        'pageNav': '#calendar thead span.pagenav'
+        'site_items': '#calendar tbody tr:not(.separator)',
+        'site_info': 'td',
+        'site_mark_title': 'a.sitemarker img::attr(title)',
+        'site_list_label_href': 'div.siteListLabel a::attr(href)',
+        'site_list_label_text': 'div.siteListLabel a::text',
+        'site_loop_text': 'div.loopName::text',
+        'site_available_href': 'a::attr(href)',
+        'next_campsite_list': '#calendar thead tr td span.pagenav',
+        'next_2_weeks': '#calendar thead tr td.week2'
     }
 
-    first_date = datetime.datetime.strptime('07/29/2017', "%m/%d/%Y").date()
+    # first_date = datetime.datetime.strptime('07/29/2017', "%m/%d/%Y").date()
 
-    # start url is configurable
-    start_urls = [
-        'https://www.reserveamerica.com/campsiteCalendar.do'
-        '?page=calendar'
-        '&contractCode=CA'
-        '&parkId=120009'
-        '&calarvdate=07/29/2017'
-        '&sitepage=true'
-        '&startIdx=0'
-    ]
-
-    def __next_page_url(self, page_nav):
-        url = page_nav.xpath('//a[contains(@id, "Next")]/@href').extract_first()
-        return url
+    def __init__(self, start_url='', *args, **kwargs):
+        self.park = {}
+        self.next_page_url = ''
+        self.first_date = self.__offset_date(datetime.datetime.today(), 2)
+        self.cookie_index = 0
+        super(BigBasinSpider, self).__init__(*args, **kwargs)
 
     def __merge_list(self, source_list, target_list):
         """
@@ -110,19 +125,63 @@ class BigBasinSpider(scrapy.Spider):
             date_format = '%m/%d/%Y'
         return date.strftime(date_format)
 
-    def __parse_sites_pages(self, response):
-        # parse current page
-        self.__parse_sites_page(response)
-
-        next_page_url = self.__next_page_url(response.css(self.SELECTORS['pageNav']))
-        # # fetch next page
-        if next_page_url:
-            full_url = 'https://www.reserveamerica.com'+next_page_url
-            yield scrapy.Request(url=full_url, callback=self.__parse_sites_pages)
-
-    def __parse_site(self, tds, first_date):
+    def has_next_campsite_list(self, response):
         """
-        parse a site reservation information
+        Whether still has more campsite list
+        :param response:
+        :return: url
+        """
+        url = response.xpath('//table[@id=\'calendar\']/thead/tr/td/span/a[contains(@id, "Next")]/@href').extract_first()
+        if url:
+            url = 'https://www.reserveamerica.com'+url
+
+        return url
+
+    def has_next_2_weeks(self, response):
+        url = response.xpath('//table[@id=\'calendar\']/thead/tr/td/a[contains(@id, "nextWeek")]/@href').extract_first()
+        if url:
+            url = 'https://www.reserveamerica.com'+url+'&startIdx=0'
+        return url
+
+    def parse_2_weeks(self, response):
+        """
+        Parse current two weeks's campsite list. It will parse all campsite list page by page
+        :param response:
+        :return:
+        """
+        self.parse_campsite_list(response)
+
+        next_2_weeks_url = self.has_next_2_weeks(response)
+        next_campsite_list_url = self.has_next_campsite_list(response)
+
+        if next_campsite_list_url:
+            logging.warning("+++++++++++++[parse_next_campsite_list] next_campsite_list_url: %s", next_campsite_list_url)
+            yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': self.cookie_index, 'index':self.cookie_index})
+        else:
+            yield None
+
+        if next_2_weeks_url:
+            logging.warning("=============[parse_2_weeks] next_2_weeks_url: %s", next_2_weeks_url)
+            self.cookie_index = self.cookie_index + 1
+            yield Request(url=next_2_weeks_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index})
+        else:
+            logging.warning("*************[parse_2_weeks] no more next week")
+            yield None
+
+    def parse_next_campsite_list(self, response):
+        self.parse_campsite_list(response)
+        next_campsite_list_url = self.has_next_campsite_list(response)
+
+        if next_campsite_list_url:
+            logging.warning("+++++++++++++[parse_next_campsite_list] next_campsite_list_url: %s", next_campsite_list_url)
+            yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': response.meta['index'], 'index': response.meta['index']})
+        else:
+            logging.warning("?????????????[parse_next_campsite_list] no more campsite list")
+            yield None
+
+    def parse_campsite(self, tds, first_date):
+        """
+        parse a campsite reservation information
         :param tds: td selector list
         :param first_date: first date of this list
         :return:
@@ -170,22 +229,22 @@ class BigBasinSpider(scrapy.Spider):
         for index, td in enumerate(tds):
             # first item is site's information
             if index == 0:
-                url = td.css(self.SELECTORS['siteListLabelHref']).extract_first()
+                url = td.css(self.SELECTORS['site_list_label_href']).extract_first()
                 queries = parse_qs(urlparse(url).query, keep_blank_values=True)
                 site['id'] = queries['siteId'][0]
                 site['parkId'] = queries['parkId'][0]
                 site['contractCode'] = queries['contractCode'][0]
-                site['title'] = td.css(self.SELECTORS['siteMarkTitle']).extract_first()
-                site['name'] = td.css(self.SELECTORS['siteListLabelText']).extract_first()
+                site['title'] = td.css(self.SELECTORS['site_mark_title']).extract_first()
+                site['name'] = td.css(self.SELECTORS['site_list_label_text']).extract_first()
                 site['url'] = url
             # second item is site's loop
             elif index == 1:
-                loop = td.css(self.SELECTORS['siteLoopText']).extract_first()
+                loop = td.css(self.SELECTORS['site_loop_text']).extract_first()
                 site['loop'] = loop
             else:
                 # reservation information
                 date_str = self.__date_string(self.__offset_date(first_date, index - 2), '')
-                url = td.css(self.SELECTORS['siteAvailableHref']).extract_first()
+                url = td.css(self.SELECTORS['site_available_href']).extract_first()
                 if url:
                     # this date is available for book
                     site['reservations'][date_str] = {
@@ -202,9 +261,9 @@ class BigBasinSpider(scrapy.Spider):
         park[site['parkId']][site['id']] = site
         return park
 
-    def __parse_sites_page(self, response):
+    def parse_campsite_list(self, response):
         """
-        Parse Reserve America Page to a JSON data
+        Parse current campsite list one by one and generate reservation data
 
         :param response:
         :return:
@@ -244,15 +303,23 @@ class BigBasinSpider(scrapy.Spider):
         """
 
         # traverse all sites in currently get page
-        sites = response.css(self.SELECTORS['siteItems'])
+        sites = response.css(self.SELECTORS['site_items'])
         # each site is one tr
         for site in sites:
-            site_info = site.css(self.SELECTORS['siteInfo'])
-            site_data = self.__parse_site(site_info, self.first_date)
+            site_info = site.css(self.SELECTORS['site_info'])
+            site_data = self.parse_campsite(site_info, self.first_date)
 
             self.__merge_dict(site_data, self.park)
 
-    def parse(self, response):
-        self.park = {}
-        self.__parse_sites_pages(response)
-        pass
+    def update_database(self):
+        print('update_database')
+
+    def notify_notification_service(self):
+        print('notify_notification_service')
+
+    def start_requests(self):
+        while len(self.scrawl_parks):
+            park = self.scrawl_parks.pop()
+            park_url = self.url_template % (park['contractCode'], park['parkId'], self.first_date.strftime('%m/%d/%Y'))
+            logging.warning("=============[parse_2_weeks] next_2_weeks_url: %s", park_url)
+            yield Request(url=park_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index})

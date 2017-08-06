@@ -8,4 +8,7 @@
 
 class ReserveAmericaPipeline(object):
     def process_item(self, item, spider):
+        print("==========================")
+        print("[ReserveAmericaPipeline] item: %s", item)
+        print("==========================")
         return item
