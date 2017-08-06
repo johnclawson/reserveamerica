@@ -18,6 +18,8 @@ NEWSPIDER_MODULE = 'reserve_america.spiders'
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'reserve_america (+http://www.yourdomain.com)'
 
+FEED_URI = 'parks.json'
+
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
 

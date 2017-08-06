@@ -53,6 +53,7 @@ class BigBasinSpider(CrawlSpider):
         self.park = {}
         self.first_date = self.__offset_date(datetime.datetime.today(), 2)
         self.cookie_index = 0
+        # self.times = 3
         super(BigBasinSpider, self).__init__(*args, **kwargs)
 
     def __merge_list(self, source_list, target_list):
@@ -154,16 +155,18 @@ class BigBasinSpider(CrawlSpider):
             calarvdate = self.get_calarvdate_from_url(next_campsite_list_url)
             yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': self.cookie_index, 'index':self.cookie_index, 'first_date':calarvdate})
         else:
-            yield None
+            yield self.park
 
+        # if next_2_weeks_url and self.times:
         if next_2_weeks_url:
             logging.warning("=============[parse_2_weeks] next_2_weeks_url: %s", next_2_weeks_url)
             self.cookie_index = self.cookie_index + 1
             calarvdate = self.get_calarvdate_from_url(next_2_weeks_url)
+            # self.times = self.times -1
             yield Request(url=next_2_weeks_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index, 'first_date':calarvdate})
         else:
             logging.warning("*************[parse_2_weeks] no more next week")
-            yield None
+            yield self.park
 
     def parse_next_campsite_list(self, response):
         self.parse_campsite_list(response)
@@ -175,7 +178,7 @@ class BigBasinSpider(CrawlSpider):
             yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': response.meta['index'], 'index': response.meta['index'], 'first_date':calarvdate})
         else:
             logging.warning("?????????????[parse_next_campsite_list] no more campsite list")
-            yield None
+            yield self.park
 
     def parse_campsite(self, tds, first_date):
         """
