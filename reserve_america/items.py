@@ -41,3 +41,10 @@ class ParkItem(Item):
     parkId = Field() # park id
     contractCode = Field()  # park contract code
     name = Field() # park name
+    services = Field() # services and amenities that this park provide
+    addressCountry = Field() # park address
+    addressStreet= Field() # park address
+    addressLocality= Field() # park address
+    addressRegion= Field() # park address
+    postalCode= Field() # park address
+    telephone= Field() # park address
