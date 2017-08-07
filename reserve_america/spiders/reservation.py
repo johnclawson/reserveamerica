@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 import datetime
-import json
-from urllib.parse import urlparse, parse_qs
+try:
+    from urllib.parse import urlparse, parse_qs
+except Exception:
+    from urlparse import urlparse, parse_qs
+
 import logging
 
 from scrapy.spiders import CrawlSpider
 from scrapy.http import Request
+
+from reserve_america.items import ReservationItem
 
 
 class BigBasinSpider(CrawlSpider):
@@ -19,7 +24,7 @@ class BigBasinSpider(CrawlSpider):
         format=
         '%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
         datefmt='%a, %d %b %Y %H:%M:%S',
-        filename='scrapy.log',
+        filename='reservation.log',
         filemode='w')
 
     scrawl_parks = [
@@ -50,7 +55,6 @@ class BigBasinSpider(CrawlSpider):
     }
 
     def __init__(self, start_url='', *args, **kwargs):
-        self.park = {}
         self.first_date = self.__offset_date(datetime.datetime.today(), 2)
         self.cookie_index = 0
         # self.times = 3
@@ -145,7 +149,10 @@ class BigBasinSpider(CrawlSpider):
         :param response:
         :return:
         """
-        self.parse_campsite_list(response)
+        reservationItems = self.parse_campsite_list(response)
+
+        while len(reservationItems):
+            yield reservationItems.pop()
 
         next_2_weeks_url = self.has_next_2_weeks(response)
         next_campsite_list_url = self.has_next_campsite_list(response)
@@ -155,7 +162,7 @@ class BigBasinSpider(CrawlSpider):
             calarvdate = self.get_calarvdate_from_url(next_campsite_list_url)
             yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': self.cookie_index, 'index':self.cookie_index, 'first_date':calarvdate})
         else:
-            yield self.park
+            yield None
 
         # if next_2_weeks_url and self.times:
         if next_2_weeks_url:
@@ -166,10 +173,14 @@ class BigBasinSpider(CrawlSpider):
             yield Request(url=next_2_weeks_url, callback=self.parse_2_weeks, dont_filter=True, meta={'cookiejar': self.cookie_index, 'first_date':calarvdate})
         else:
             logging.warning("*************[parse_2_weeks] no more next week")
-            yield self.park
+            yield None
 
     def parse_next_campsite_list(self, response):
-        self.parse_campsite_list(response)
+        reservationItems = self.parse_campsite_list(response)
+
+        while len(reservationItems):
+            yield reservationItems.pop()
+
         next_campsite_list_url = self.has_next_campsite_list(response)
 
         if next_campsite_list_url:
@@ -178,7 +189,7 @@ class BigBasinSpider(CrawlSpider):
             yield Request(url=next_campsite_list_url, callback=self.parse_next_campsite_list, dont_filter=True, meta={'cookiejar': response.meta['index'], 'index': response.meta['index'], 'first_date':calarvdate})
         else:
             logging.warning("?????????????[parse_next_campsite_list] no more campsite list")
-            yield self.park
+            yield None
 
     def parse_campsite(self, tds, first_date):
         """
@@ -186,81 +197,49 @@ class BigBasinSpider(CrawlSpider):
         :param tds: td selector list
         :param first_date: first date of this list
         :return:
-        {
-            '120009': {
-                '26702': {
-                    id: '26702',
-                    parkId: '120009',
-                    contractCode: 'CA',
-                    loop: '',
-                    url: '/camping/Big_Basin_Redwoods_Sp/r/campsiteDetails.do?siteId=26702&contractCode=CA&parkId=120009',
-                    name: '104B',
-                    title: '104B , TENT ONLY SITE',
-                    reservations: {
-                        '07/29/2017': {
-                            status: 'r'
-                        },
-                        '07/30/2017': {
-                            status: 'a',
-                            url: '/camping/Big_Basin_Redwoods_Sp/r/campsiteDetails.do?siteId=26702&contractCode=CA&parkId=120009&offset=0&arvdate=7/30/2017'
-                        },
-                        '07/31/2017': {
-                            status: 'w'
-                        },
-                        '08/01/2017': {
-                            status: 'x'
-                        },
-                        ...
-                    }
-                }
-            }
-        }
+
         """
-        park = {}
-        site = {
-            'id': None,
-            'parkId': None,
-            'contractCode': None,
-            'loop': None,
-            'url': None,
-            'name': None,
-            'title': None,
-            'reservations': {}
-        }
+        campsiteId = ''
+        parkId = ''
+        contractCode = ''
+        reservations = []
         for index, td in enumerate(tds):
             # first item is site's information
             if index == 0:
                 url = td.css(self.SELECTORS['site_list_label_href']).extract_first()
                 queries = parse_qs(urlparse(url).query, keep_blank_values=True)
-                site['id'] = queries['siteId'][0]
-                site['parkId'] = queries['parkId'][0]
-                site['contractCode'] = queries['contractCode'][0]
-                site['title'] = td.css(self.SELECTORS['site_mark_title']).extract_first()
-                site['name'] = td.css(self.SELECTORS['site_list_label_text']).extract_first()
-                site['url'] = url
+                campsiteId = queries['siteId'][0]
+                parkId = queries['parkId'][0]
+                contractCode = queries['contractCode'][0]
             # second item is site's loop
             elif index == 1:
                 loop = td.css(self.SELECTORS['site_loop_text']).extract_first()
-                site['loop'] = loop
-            else:
-                # reservation information
-                date_str = self.__date_string(self.__offset_date(first_date, index - 2), '')
-                url = td.css(self.SELECTORS['site_available_href']).extract_first()
-                if url:
-                    # this date is available for book
-                    site['reservations'][date_str] = {
-                        'status': self.__get_status('a'),
-                        'url': url
-                    }
 
-                else:
-                    status = td.css('::text').extract_first()
-                    site['reservations'][date_str] = {
-                        'status': self.__get_status(status)
-                    }
-        park[site['parkId']] = {}
-        park[site['parkId']][site['id']] = site
-        return park
+        index = 2
+        while index < len(tds):
+            reservationItem = ReservationItem()
+            reservationItem['campsiteId'] = campsiteId
+            reservationItem['parkId'] = parkId
+            reservationItem['contractCode'] = contractCode
+            td = tds[index]
+            # reservation information
+            date_str = self.__date_string(self.__offset_date(first_date, index - 2), '')
+            url = td.css(self.SELECTORS['site_available_href']).extract_first()
+            reservationItem['date'] = date_str
+            if url:
+                # this date is available for book
+                reservationItem['status'] = self.__get_status('a')
+                reservationItem['url'] = url
+            else:
+                status = td.css('::text').extract_first()
+                reservationItem['status'] = self.__get_status(status)
+            id = '%s::%s::%s::%s' % (parkId, contractCode, campsiteId, date_str)
+            reservationItem['_id'] = id
+            reservationItem['lastModified'] = datetime.datetime.now().isoformat()
+            reservations.append(reservationItem)
+            index = index + 1
+
+        return reservations
 
     def parse_campsite_list(self, response):
         """
@@ -270,47 +249,17 @@ class BigBasinSpider(CrawlSpider):
         :return:
         """
 
-        """
-        park information data
-        {
-            '120009':{
-               '26702': {
-                    id: '26702',
-                    parkId: '120009',
-                    contractCode: 'CA',
-                    loop: '',
-                    url: '/camping/Big_Basin_Redwoods_Sp/r/campsiteDetails.do?siteId=26702&contractCode=CA&parkId=120009',
-                    name: '104B',
-                    title: '104B , TENT ONLY SITE',
-                    reservations: {
-                        '07/29/2017': {
-                            status: 'r'
-                        },
-                        '07/30/2017': {
-                            status: 'a',
-                            url: '/camping/Big_Basin_Redwoods_Sp/r/campsiteDetails.do?siteId=26702&contractCode=CA&parkId=120009&offset=0&arvdate=7/30/2017'
-                        },
-                        '07/31/2017': {
-                            status: 'w'
-                        },
-                        '08/01/2017': {
-                            status: 'x'
-                        },
-                        ...
-                    }
-                }
-            }
-        }
-        """
-
         # traverse all sites in currently get page
         sites = response.css(self.SELECTORS['site_items'])
         # each site is one tr
+        all_reservations = []
         for site in sites:
             site_info = site.css(self.SELECTORS['site_info'])
-            site_data = self.parse_campsite(site_info, datetime.datetime.strptime(response.meta['first_date'][0], "%m/%d/%Y").date())
+            reservations = self.parse_campsite(site_info, datetime.datetime.strptime(response.meta['first_date'][0], "%m/%d/%Y").date())
+            all_reservations = all_reservations+reservations
 
-            self.__merge_dict(site_data, self.park)
+        logging.warning("!!!!!!!!!!!all_reservations: %s", all_reservations)
+        return all_reservations
 
     def start_requests(self):
         while len(self.scrawl_parks):

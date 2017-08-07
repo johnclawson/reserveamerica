@@ -1,6 +1,6 @@
 # Logs
 selenium/logs
-*.log
+reserve_america/spiders/reservation.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
