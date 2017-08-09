@@ -13,6 +13,7 @@ from scrapy.spiders import CrawlSpider
 from scrapy.http import Request
 
 from reserve_america.items import ReservationItem
+from reserve_america.park_list import park_list
 
 class ReservationSpider(CrawlSpider):
     name = 'reservation'
@@ -28,12 +29,7 @@ class ReservationSpider(CrawlSpider):
         filename='reservation.log',
         filemode='w')
 
-    scrawl_parks = [
-        {
-            "contractCode": "CA",
-            "parkId": 120009
-        }
-    ]
+    scrawl_parks = park_list
 
     # All available status for a site, immutable dict
     STATUSES = {
