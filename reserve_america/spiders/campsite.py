@@ -119,7 +119,7 @@ class CampsiteSpider(CrawlSpider):
 
     def parse_campsite_detail(self, response):
         details = response.xpath('//div[@id="sitedetail"]/ul/li/text()').extract()
-        campsiteDetailItem = CampsiteDetailItem()
+        campsiteDetailItem = {}
         while len(details):
             item = details.pop()
             item = re.search('^([^:]+):\s*(.+)', item)

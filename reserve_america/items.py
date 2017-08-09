@@ -45,6 +45,11 @@ class CampsiteDetailItem(Item):
     campfire_allowed = Field()
     fire_pit = Field()
     picnic_table = Field()
+    hike_in_distance_to_site = Field()
+    site_rating = Field()
+    double_driveway = Field()
+    site_length = Field()
+    lantern_pole = Field()
 
 
 class CampsiteItem(Item):
