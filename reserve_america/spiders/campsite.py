@@ -56,6 +56,9 @@ class CampsiteSpider(CrawlSpider):
 
     def parse_park(self, response):
         parkItem = ParkItem()
+        # f = open('park.html', 'w')
+        # f.write(response.body.decode("utf-8"))
+        # f.close()
         parkItem['name'] = response.xpath('//div[@id="campname"]/h1/span[@id="cgroundName"]/text()').extract_first()
         parkItem['parkId'] = response.meta['parkId']
         parkItem['contractCode'] = response.meta['contractCode']
@@ -129,7 +132,11 @@ class CampsiteSpider(CrawlSpider):
     def start_requests(self):
         while len(self.scrawl_parks):
             park = self.scrawl_parks.pop()
-            url = self.url_template % (park['contractCode'], park['parkId'], self.first_date.strftime('%m/%d/%Y'))
+            if park['url']:
+                url = park['url']
+            else:
+                url = self.url_template % (park['contractCode'], park['parkId'], self.first_date.strftime('%m/%d/%Y'))
+            # url = self.url_template % (park['contractCode'], park['parkId'], self.first_date.strftime('%m/%d/%Y'))
             # url = self.url_template % (park['contractCode'], park['parkId'])
             logging.debug("[start_requests] url: %s", url)
             yield Request(url=url, callback=self.parse_park, dont_filter=True,
