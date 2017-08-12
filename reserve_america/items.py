@@ -12,7 +12,7 @@ class ReservationItem(Item):
     Reservation
     """
     _id = Field() # override MongoDB generate ID
-    campsiteId = Field()  # campsite id
+    siteId = Field()  # campsite id
     parkId = Field()  # park id
     contractCode = Field()  # park contract code
     date = Field() # reservation date string

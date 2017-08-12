@@ -215,7 +215,7 @@ class ReservationSpider(CrawlSpider):
         index = 2
         while index < len(tds):
             reservationItem = ReservationItem()
-            reservationItem['campsiteId'] = campsiteId
+            reservationItem['siteId'] = campsiteId
             reservationItem['parkId'] = parkId
             reservationItem['contractCode'] = contractCode
             td = tds[index]
