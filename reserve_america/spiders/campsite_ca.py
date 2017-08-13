@@ -223,7 +223,6 @@ class ReservationSpider(CrawlSpider):
             date_str = self.__date_string(self.__offset_date(first_date, index - 2), '')
             url = td.css(self.SELECTORS['site_available_href']).extract_first()
             reservationItem['date'] = date_str
-            reservationItem['weekday'] = datetime.datetime.strptime(reservationItem['date'], "%m/%d/%Y").date().weekday()
             if url:
                 # this date is available for book
                 reservationItem['status'] = self.__get_status('a')

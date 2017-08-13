@@ -109,7 +109,6 @@ class CampsiteSpider(CrawlSpider):
 
     def parse_campsite(self, response):
         campsiteItem = CampsiteItem()
-        detail = CampsiteDetailItem()
         data = self.get_data_from_url(response.url)
         campsiteItem['_id'] = '%s::%s::%s' % (data['parkId'], data['contractCode'], data['siteId'])
         campsiteItem['parkId'] = data['parkId']

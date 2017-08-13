@@ -12,10 +12,12 @@ class ReservationItem(Item):
     Reservation
     """
     _id = Field() # override MongoDB generate ID
+    facilityId = Field()  # Facilicy id, this is used in https://www.reservecalifornia.com
     siteId = Field()  # campsite id
     parkId = Field()  # park id
     contractCode = Field()  # park contract code
     date = Field() # reservation date string
+    weekday = Field() # reservation week day 0 - 6
     status = Field() # status value, oneOf ['r', 'a', 'w', 'x']
     url = Field() # if it is available, the book url
     lastModified = Field() #
