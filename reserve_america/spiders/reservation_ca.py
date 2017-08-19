@@ -22,7 +22,7 @@ from reserve_america.park_list import park_list
 from reserve_america.spiders.payload.post import park_post_body, campsit_post_body
 
 class CampsiteSpider(CrawlSpider):
-    name = 'campsite-ca'
+    name = 'reservation-ca'
 
     url = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetGoogleMapPlaceData'
     url_campsite = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetUnitGridDataHtmlString'

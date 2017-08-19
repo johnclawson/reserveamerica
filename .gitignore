@@ -166,3 +166,4 @@ ENV/
 .mypy_cache/
 
 parks.json
+result*.html

@@ -31,6 +31,8 @@ ITEM_PIPELINES = {
     'reserve_america.pipelines.MongoDBPipleline': 300,
 }
 
+COOKIES_DEBUG = True
+
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 #CONCURRENT_REQUESTS = 32
 
