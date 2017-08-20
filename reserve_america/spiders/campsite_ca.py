@@ -9,6 +9,8 @@ from scrapy.http import Request, HtmlResponse, FormRequest
 # Python 3
 import html
 
+import os
+
 import json
 import codecs
 
@@ -64,8 +66,14 @@ class CampsiteSpider(CrawlSpider):
     def __offset_date(self, date, offset):
         return date + datetime.timedelta(days=offset)
 
+    def get_env(self, key):
+        try:
+            return os.environ[key]
+        except Exception:
+            return ''
+
     def parse_park(self, response):
-        # self.save_park_json(response)
+        self.save_park_json(response)
         # get park string
         park = codecs.decode(response.body, 'utf8')
         # convert json string to JSon
@@ -90,7 +98,6 @@ class CampsiteSpider(CrawlSpider):
 
         # get each campsite group
         while len(facility_infos):
-            self.cookie_index = self.cookie_index + 1
             facility = facility_infos.pop()
             date_str = self.first_date.strftime('%m/%d/%Y')
             advance_search_form['ctl01$mainContent$hdnFacilityid'] = str(facility['FacilityId'])
@@ -104,14 +111,14 @@ class CampsiteSpider(CrawlSpider):
                                     'cookieIndex': self.cookie_index,
                                     'FacilityId': facility['FacilityId'],
                                     'PlaceId': facility['PlaceId']},
+                              dont_filter=True,
                               formdata=advance_search_form,
                               callback=self.parse_campsite_list)
-            # get campsites in each campsite group
-            # yield Request(url=self.url_campsite, method="POST", meta={'cookiejar': 1, 'FacilityId':facility['FacilityId'], 'PlaceId':facility['PlaceId']}, body=json.dumps(campsit_post_body),
-            #               headers={'Content-Type': 'application/json'},
-            #               callback=self.parse_campsite_list)
+            self.cookie_index = self.cookie_index + 1
 
     def save_campsite_list_html(self, response):
+        if not self.get_env("DEBUG"):
+            return
         url = ('receives/result_campsites_%d_%d.html' % (response.meta['PlaceId'], response.meta['FacilityId']))
         f = open(url, 'w')
         # f.write(str(response.body))
@@ -119,6 +126,8 @@ class CampsiteSpider(CrawlSpider):
         f.close()
 
     def save_park_json(self, response):
+        if not self.get_env("DEBUG"):
+            return
         # get park string
         park = codecs.decode(response.body, 'utf8')
         # convert json string to JSon
@@ -129,7 +138,7 @@ class CampsiteSpider(CrawlSpider):
         f.close()
 
     def parse_campsite_list(self, response):
-        # self.save_campsite_list_html(response)
+        self.save_campsite_list_html(response)
         sites = response.xpath('//div[@id="divUnitGridlist"]/div/table/tr[@class="unitdata"]/td[2]/@onclick').extract()
         for link in sites:
             reservation_item = self.parse_campsite_from_url_link(link,
@@ -150,6 +159,7 @@ class CampsiteSpider(CrawlSpider):
                       'FacilityId': response.meta['FacilityId'],
                       'PlaceId': response.meta['PlaceId'],
                       'SiteId': reservation_item['siteId']},
+                dont_filter=True,
                 callback=self.parse_campsite)
 
     def parse_campsite(self, response):
@@ -219,9 +229,11 @@ class CampsiteSpider(CrawlSpider):
     def home_page(self, response):
         yield Request(url=self.url, method="POST", meta={'cookiejar': 1}, body=json.dumps(park_post_body),
                       headers={'Content-Type': 'application/json'},
+                      dont_filter=True,
                       callback=self.parse_park)
 
     def start_requests(self):
         yield Request(url='https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetGoogleMapPlaceData',
                       meta={'cookiejar': 1},
+                      dont_filter=True,
                       callback=self.home_page)

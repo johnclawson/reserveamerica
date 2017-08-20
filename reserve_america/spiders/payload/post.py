@@ -2,6 +2,38 @@ park_post_body = {
     "googlePlaceSearchParameters": {
         "Latitude": "37.171596527103105",
         "Longitude": "-122.22204589843994",
+        "Filter": True,
+        "AvailabilitySearchParams": {
+            "StartDate": "8/30/2017",
+            "Nights": 1,
+            "CategoryId": 0,
+            "ParkCategory": 8,
+            "ChooseActivity": 1
+        },
+        "MapboxPlaceid": 3
+    }
+}
+
+park_post_body_1 = {
+    "googlePlaceSearchParameters": {
+        "Latitude": "37.2141227722168",
+        "Longitude": "-122.24229431152344",
+        "Filter": True,
+        "AvailabilitySearchParams": {
+            "StartDate": "8/30/2017",
+            "Nights": 1,
+            "CategoryId": 0,
+            "ParkCategory": 8,
+            "ChooseActivity": 1
+        },
+        "MapboxPlaceid": 618
+    }
+}
+
+park_post_body_full = {
+    "googlePlaceSearchParameters": {
+        "Latitude": "37.171596527103105",
+        "Longitude": "-122.22204589843994",
         "South": 37.1511444242048,
         "North": 37.192043095819,
         "East": -122.15037727356562,
