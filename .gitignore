@@ -164,6 +164,5 @@ ENV/
 
 # mypy
 .mypy_cache/
-
-parks.json
 result*.html
+result*.json

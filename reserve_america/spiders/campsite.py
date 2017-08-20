@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 import re
-try:
-    # python 3.x
-    from urllib.parse import urlparse, parse_qs
-except Exception:
-    # python 2.x
-    from urlparse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs
 import logging
 from scrapy.spiders import CrawlSpider
 from scrapy.http import Request
@@ -14,6 +9,7 @@ from scrapy.http import Request
 from pydash import strings
 
 from reserve_america.items import ParkItem, CampsiteItem, CampsiteDetailItem
+from reserve_america.data_mapping import equal_campsite_detail_keys
 from reserve_america.park_list import park_list
 
 class CampsiteSpider(CrawlSpider):
@@ -105,7 +101,6 @@ class CampsiteSpider(CrawlSpider):
         else:
             logging.debug("No more campsites")
             yield None
-            pass
 
     def parse_campsite(self, response):
         campsiteItem = CampsiteItem()
@@ -114,19 +109,27 @@ class CampsiteSpider(CrawlSpider):
         campsiteItem['parkId'] = data['parkId']
         campsiteItem['contractCode'] = data['contractCode']
         campsiteItem['siteId'] = data['siteId']
-        campsiteItem['nameArea'] = response.xpath('//div[@id="sitenamearea"]/div/span/text()').extract_first() + response.xpath('//div[@id="sitenamearea"]/div/text()').extract_first()
+        campsiteItem['name'] = response.xpath('//div[@id="sitenamearea"]/div/span/text()').extract_first() + response.xpath('//div[@id="sitenamearea"]/div/text()').extract_first()
         campsiteItem['url'] = response.url
         campsiteItem['detail'] = self.parse_campsite_detail(response)
         yield campsiteItem
 
     def parse_campsite_detail(self, response):
         details = response.xpath('//div[@id="sitedetail"]/ul/li/text()').extract()
-        campsiteDetailItem = {}
+        campsite_detail_item = CampsiteDetailItem()
         while len(details):
             item = details.pop()
             item = re.search('^([^:]+):\s*(.+)', item)
-            campsiteDetailItem[strings.snake_case(item.group(1))] = item.group(2)
-        return campsiteDetailItem
+            key = strings.snake_case(item.group(1))
+            value = item.group(2)
+            if key in campsite_detail_item.fields:
+                campsite_detail_item[key] = value
+            elif key in equal_campsite_detail_keys:
+                campsite_detail_item[equal_campsite_detail_keys[key]] = value
+            else:
+                campsite_detail_item['unknown'][key] = value
+
+        return campsite_detail_item
 
     def start_requests(self):
         while len(self.scrawl_parks):

@@ -26,7 +26,7 @@ class CampsiteDetailItem(Item):
     site_type = Field() # Site Type
     site_reserve_type = Field() # Site Reserve Type
     site_access = Field()
-    accessible = Field()
+    is_ada = Field() # ADA: Americans with Disabilities Act
     checkin_time = Field() # Checkin Time
     checkout_time = Field() # Checkout Time
     type_of_use = Field() # Checkout Time
@@ -52,7 +52,7 @@ class CampsiteDetailItem(Item):
     double_driveway = Field()
     site_length = Field()
     lantern_pole = Field()
-
+    unknown = Field()
 
 class CampsiteItem(Item):
     """
@@ -61,9 +61,10 @@ class CampsiteItem(Item):
     _id = Field()  # override MongoDB generate ID
     siteId = Field() # campsite id
     parkId = Field() # park id
+    facilityId = Field()  # Facilicy id, this is used in https://www.reservecalifornia.com
     contractCode = Field() # park contract code
     url = Field() # campsite detail information
-    nameArea = Field() # campsite name
+    name = Field() # campsite name
     detail = Field() # CampsiteDetailItem
 
 class ParkItem(Item):
@@ -81,3 +82,4 @@ class ParkItem(Item):
     addressRegion= Field() # park address
     postalCode= Field() # park address
     telephone= Field() # park address
+    url= Field() # park url link
