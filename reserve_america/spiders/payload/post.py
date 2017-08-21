@@ -30,6 +30,10 @@ park_post_body_1 = {
     }
 }
 
+post_body_park_info_by_name = {
+    "name": "Big Basin Redwoods SP"
+}
+
 park_post_body_full = {
     "googlePlaceSearchParameters": {
         "Latitude": "37.171596527103105",

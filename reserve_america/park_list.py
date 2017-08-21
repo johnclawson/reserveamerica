@@ -20,3 +20,12 @@ park_list = [
         "url": "https://www.reserveamerica.com/camping/angel-lake/r/campgroundDetails.do?contractCode=NRSO&parkId=70231"
     }
 ]
+
+ca_park_list = [
+    {
+        "name": "Big Basin Redwoods SP"
+    },
+    {
+        "name": "Big Basin Redwoods SP Tent Cabins"
+    }
+]
