@@ -20,7 +20,7 @@ from reserve_america.spiders.payload.post import park_post_body, campsites_reser
 
 
 class CampsiteSpider(CrawlSpider):
-    name = 'campsite-ca'
+    name = 'reserve_california'
 
     # step 1: load default page. Create session Id. GET
     url_default = 'https://www.reservecalifornia.com/CaliforniaWebHome/Default.aspx'
@@ -45,7 +45,7 @@ class CampsiteSpider(CrawlSpider):
     #     format=
     #     '%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
     #     datefmt='%a, %d %b %Y %H:%M:%S',
-    #     filename='campsiteca.log',
+    #     filename='reserve_california.log',
     #     filemode='w')
 
     scrawl_parks = ca_park_list
