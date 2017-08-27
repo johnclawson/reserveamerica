@@ -1,25 +1,21 @@
 # -*- coding: utf-8 -*-
 import datetime
 import re
-from urllib.parse import urlparse, parse_qs
 import logging
 from scrapy.spiders import CrawlSpider
-from scrapy.http import Request, FormRequest
-
+from scrapy.http import Request, FormRequest, HtmlResponse
 # Python 3
 import html
 import os
-
 import json
 import codecs
-
 from pydash import strings
 
 from reserve_america.items import ReservationItem, ParkItem, CampsiteItem, CampsiteDetailItem
 from reserve_america.data_mapping import equal_campsite_detail_keys
 from reserve_america.park_list import ca_park_list
 from reserve_america.utils import unique_url
-from reserve_america.spiders.payload.post import park_post_body, post_body_park_info_by_name, advance_search_form, web_home, set_night_by_place_id_and_facility_id_on_unit_grid
+from reserve_america.spiders.payload.post import park_post_body, campsit_post_body, post_body_park_info_by_name, advance_search_form, web_home, set_night_by_place_id_and_facility_id_on_unit_grid
 
 
 class CampsiteSpider(CrawlSpider):
@@ -39,6 +35,8 @@ class CampsiteSpider(CrawlSpider):
     url_advance_search = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx'
     # step 7: get campsite information
     url_template_campsite = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/UnitDetailPopup.aspx?facility_id=%s&unit_id=%s&arrival_date=%s 12:00:00 AM&is_available=%s'
+
+    url_campsite = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetUnitGridDataHtmlString'
 
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.basicConfig(
@@ -66,7 +64,7 @@ class CampsiteSpider(CrawlSpider):
     def __get_status(self, status):
         try:
             return self.STATUSES[status.lower()]
-        except:
+        except Exception:
             # default return reserve
             return self.STATUSES['r']
 
@@ -124,6 +122,65 @@ class CampsiteSpider(CrawlSpider):
                           headers={'Content-Type': 'application/json; charset=UTF-8'},
                           callback=self.after_set_park_facility
                           )
+            campsite_list_body = campsit_post_body.copy()
+            campsite_list_body['FacilityId'] = facility['FacilityId']
+            campsite_list_body['PlaceId'] = facility['PlaceId']
+            # get campsites in each campsite group
+            yield Request(url=unique_url(self.url_campsite),
+                          method="POST",
+                          meta={'cookiejar': 1,
+                                'FacilityId': facility['FacilityId'],
+                                'PlaceId': facility['PlaceId']},
+                          body=json.dumps(campsite_list_body),
+                          headers={'Content-Type': 'application/json'},
+                          callback=self.parse_campsite_list_rs)
+
+    def parse_campsite_list_rs(self, response):
+        html_url = ('receives/result_rs_%s_%s.html' % (str(response.meta['PlaceId']), str(response.meta['FacilityId'])))
+        # f = open(html_url, 'w')
+        campsite_page = codecs.decode(response.body, 'utf8')
+        campsite_page_dict = json.loads(campsite_page)
+        html_body = campsite_page_dict['d']
+        html = HtmlResponse(url= html_url, encoding='utf-8', body=html_body)
+
+        sites = html.xpath('//table/tr[@class="unitdata"]')
+        all_reservations = []
+        for site in sites:
+            reservation_links = site.xpath('//td/@onclick').extract()
+            reservations = self.parse_campsite_rs(reservation_links, response.meta['PlaceId'], response.meta['FacilityId'])
+            all_reservations = all_reservations + reservations
+
+        while len(all_reservations):
+            yield all_reservations.pop()
+
+        # f.write(html_body)
+        # f.close()
+
+    def parse_campsite_rs(self, reservation_links, park_id, facility_id):
+        reservations = []
+        index = 0
+        while index < len(reservation_links):
+            reservation_item = ReservationItem()
+            link = reservation_links[index]
+            link = html.unescape(link)
+            reservation_item['siteId'] = re.search('unit_id=([^\'&,\s]+)', link).group(1)
+            reservation_item['date'] = re.search('arrival_date=([^\'&,\s]+)', link).group(1)
+            reservation_item['weekday'] = datetime.datetime.strptime(reservation_item['date'], "%m/%d/%Y").date().weekday()
+            id = '%s::%s::%s::%s::%s' % (park_id, 'ca', facility_id, reservation_item['siteId'], reservation_item['date'])
+            reservation_item['_id'] = id
+            reservation_item['facilityId'] = facility_id
+            reservation_item['parkId'] = park_id
+            reservation_item['contractCode'] = 'CA'
+            reservation_item['lastModified'] = datetime.datetime.now().isoformat()
+            is_available = re.search('is_available=([^\'&,\s]+)', link).group(1)
+            if is_available == 'false':
+                reservation_item['status'] = self.__get_status('r')
+            else:
+                reservation_item['status'] = self.__get_status('a')
+                # reservation_item['url'] =
+            reservations.append(reservation_item)
+            index = index + 1
+        return reservations
 
     def after_set_park_facility(self, response):
         # step 6: get campsites by click facility
@@ -258,21 +315,6 @@ class CampsiteSpider(CrawlSpider):
                       headers={'Content-Type': 'application/json; charset=UTF-8'},
                       dont_filter=True,
                       callback=self.parse_park)
-
-    def after_click_reserve_set_night_by_place_id_and_facility_id(self, response):
-        body = set_night_by_place_id_and_facility_id_on_unit_grid.copy()
-        body['placeId'] = response.meta['park']['CityParkId']
-
-        # step 4: click reserve button, first set night by place id and facility id
-        yield Request(url=unique_url(self.url_set_by_place_id_facility_id),
-                      method="POST",
-                      body=json.dumps(body),
-                      meta={'cookiejar': response.meta['cookiejar'],
-                            'park': response.meta['park']},
-                      dont_filter=True,
-                      headers={'Content-Type': 'application/json; charset=UTF-8'},
-                      callback=self.home_page
-                      )
 
     def set_select_park(self, response):
         body = codecs.decode(response.body, 'utf8')

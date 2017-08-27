@@ -33,5 +33,8 @@ ca_park_list = [
     },
     {
         "name": "Big Basin Redwoods SP"
+    },
+    {
+        "name": "Henry Cowell Redwoods SP"
     }
 ]
