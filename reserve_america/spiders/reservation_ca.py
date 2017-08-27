@@ -19,7 +19,7 @@ from reserve_america.items import ReservationItem
 
 from reserve_america.park_list import park_list
 
-from reserve_america.spiders.payload.post import park_post_body, campsit_post_body
+from reserve_america.spiders.payload.post import park_post_body, campsites_reservations_post_body
 
 class CampsiteSpider(CrawlSpider):
     name = 'reservation-ca'
@@ -81,10 +81,10 @@ class CampsiteSpider(CrawlSpider):
         # get each campsite group
         while len(facility_infos):
             facility = facility_infos.pop()
-            campsit_post_body['FacilityId'] = facility['FacilityId']
-            campsit_post_body['PlaceId'] = facility['PlaceId']
+            campsites_reservations_post_body['FacilityId'] = facility['FacilityId']
+            campsites_reservations_post_body['PlaceId'] = facility['PlaceId']
             # get campsites in each campsite group
-            yield Request(url=self.url_campsite, method="POST", meta={'cookiejar': 1, 'FacilityId':facility['FacilityId'], 'PlaceId':facility['PlaceId']}, body=json.dumps(campsit_post_body),
+            yield Request(url=self.url_campsite, method="POST", meta={'cookiejar': 1, 'FacilityId':facility['FacilityId'], 'PlaceId':facility['PlaceId']}, body=json.dumps(campsites_reservations_post_body),
                           headers={'Content-Type': 'application/json'},
                           callback=self.parse_campsite_list)
         # f.write(json.dumps(park_dict))

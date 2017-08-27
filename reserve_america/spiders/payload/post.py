@@ -69,10 +69,10 @@ park_post_body_full = {
     }
 }
 
-campsit_post_body = {
+campsites_reservations_post_body = {
     "FacilityId": 332,
     "PlaceId": 3,
-    "MaximumDates": 180,
+    "MaximumDates": 30,
     "IsTablet": True,
     "MaximumStayforGrid": 1
 }

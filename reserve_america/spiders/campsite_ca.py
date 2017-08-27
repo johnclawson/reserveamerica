@@ -6,6 +6,7 @@ from scrapy.spiders import CrawlSpider
 from scrapy.http import Request, FormRequest, HtmlResponse
 # Python 3
 import html
+import shutil
 import os
 import json
 import codecs
@@ -15,7 +16,7 @@ from reserve_america.items import ReservationItem, ParkItem, CampsiteItem, Camps
 from reserve_america.data_mapping import equal_campsite_detail_keys
 from reserve_america.park_list import ca_park_list
 from reserve_america.utils import unique_url
-from reserve_america.spiders.payload.post import park_post_body, campsit_post_body, post_body_park_info_by_name, advance_search_form, web_home, set_night_by_place_id_and_facility_id_on_unit_grid
+from reserve_america.spiders.payload.post import park_post_body, campsites_reservations_post_body, post_body_park_info_by_name, advance_search_form, web_home, set_night_by_place_id_and_facility_id_on_unit_grid
 
 
 class CampsiteSpider(CrawlSpider):
@@ -36,16 +37,16 @@ class CampsiteSpider(CrawlSpider):
     # step 7: get campsite information
     url_template_campsite = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/UnitDetailPopup.aspx?facility_id=%s&unit_id=%s&arrival_date=%s 12:00:00 AM&is_available=%s'
 
-    url_campsite = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetUnitGridDataHtmlString'
+    url_campsites_reservations = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetUnitGridDataHtmlString'
 
-    logging.getLogger("requests").setLevel(logging.WARNING)
-    logging.basicConfig(
-        level=logging.WARNING,
-        format=
-        '%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-        datefmt='%a, %d %b %Y %H:%M:%S',
-        filename='campsiteca.log',
-        filemode='w')
+    # logging.getLogger("requests").setLevel(logging.WARNING)
+    # logging.basicConfig(
+    #     level=logging.WARNING,
+    #     format=
+    #     '%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+    #     datefmt='%a, %d %b %Y %H:%M:%S',
+    #     filename='campsiteca.log',
+    #     filemode='w')
 
     scrawl_parks = ca_park_list
 
@@ -75,7 +76,7 @@ class CampsiteSpider(CrawlSpider):
         try:
             return os.environ[key]
         except Exception:
-            return ''
+            return None
 
     def parse_park(self, response):
         self.save_park_json(response)
@@ -102,11 +103,6 @@ class CampsiteSpider(CrawlSpider):
         # get each campsite group
         while len(facility_infos):
             facility = facility_infos.pop()
-            date_str = self.first_date.strftime('%m/%d/%Y')
-            form_data = advance_search_form.copy()
-            form_data['ctl01$mainContent$hdnFacilityid'] = str(facility['FacilityId'])
-            form_data['ctl01$mainContent$hdnPlaceid'] = str(facility['PlaceId'])
-            form_data['ctl01$mainContent$txtDateRange'] = date_str
 
             body = set_night_by_place_id_and_facility_id_on_unit_grid.copy()
             body['placeId'] = facility['PlaceId']
@@ -117,46 +113,61 @@ class CampsiteSpider(CrawlSpider):
                           method="POST",
                           body=json.dumps(body),
                           meta={'cookiejar': self.cookie_index,
-                                'formData': form_data},
+                                'FacilityId': facility['FacilityId'],
+                                'PlaceId': facility['PlaceId']},
                           dont_filter=True,
                           headers={'Content-Type': 'application/json; charset=UTF-8'},
                           callback=self.after_set_park_facility
                           )
-            campsite_list_body = campsit_post_body.copy()
+
+            campsite_list_body = campsites_reservations_post_body.copy()
             campsite_list_body['FacilityId'] = facility['FacilityId']
             campsite_list_body['PlaceId'] = facility['PlaceId']
-            # get campsites in each campsite group
-            yield Request(url=unique_url(self.url_campsite),
+            # step 7: get campsites reservations in each campsite group
+            # yield Request(url=unique_url(self.url_campsites_reservations),
+            yield Request(url=unique_url(self.url_campsites_reservations),
                           method="POST",
-                          meta={'cookiejar': 1,
+                          meta={'cookiejar': response.meta['cookiejar'],
                                 'FacilityId': facility['FacilityId'],
                                 'PlaceId': facility['PlaceId']},
                           body=json.dumps(campsite_list_body),
+                          dont_filter=True,
                           headers={'Content-Type': 'application/json'},
-                          callback=self.parse_campsite_list_rs)
+                          callback=self.parse_campsites_reservations)
 
-    def parse_campsite_list_rs(self, response):
+    def after_set_park_facility(self, response):
+        # step 6: get campsites by click facility
+        date_str = self.first_date.strftime('%m/%d/%Y')
+        form_data = advance_search_form.copy()
+        form_data['ctl01$mainContent$hdnFacilityid'] = str(response.meta['FacilityId'])
+        form_data['ctl01$mainContent$hdnPlaceid'] = str(response.meta['PlaceId'])
+        form_data['ctl01$mainContent$txtDateRange'] = date_str
+        yield FormRequest(url=unique_url(self.url_advance_search),
+                          meta={'cookiejar': response.meta['cookiejar'],
+                                'FacilityId': response.meta['FacilityId'],
+                                'PlaceId': response.meta['PlaceId']},
+                          formdata=form_data,
+                          callback=self.parse_campsite_list)
+
+    def parse_campsites_reservations(self, response):
         html_url = ('receives/result_rs_%s_%s.html' % (str(response.meta['PlaceId']), str(response.meta['FacilityId'])))
-        # f = open(html_url, 'w')
         campsite_page = codecs.decode(response.body, 'utf8')
         campsite_page_dict = json.loads(campsite_page)
         html_body = campsite_page_dict['d']
         html = HtmlResponse(url= html_url, encoding='utf-8', body=html_body)
-
         sites = html.xpath('//table/tr[@class="unitdata"]')
+        if len(sites):
+            self.save_reservations_html(html, str(response.meta['PlaceId']), str(response.meta['FacilityId']))
         all_reservations = []
         for site in sites:
             reservation_links = site.xpath('//td/@onclick').extract()
-            reservations = self.parse_campsite_rs(reservation_links, response.meta['PlaceId'], response.meta['FacilityId'])
+            reservations = self.parse_a_campsite_reservations(reservation_links, response.meta['PlaceId'], response.meta['FacilityId'])
             all_reservations = all_reservations + reservations
 
         while len(all_reservations):
             yield all_reservations.pop()
 
-        # f.write(html_body)
-        # f.close()
-
-    def parse_campsite_rs(self, reservation_links, park_id, facility_id):
+    def parse_a_campsite_reservations(self, reservation_links, park_id, facility_id):
         reservations = []
         index = 0
         while index < len(reservation_links):
@@ -182,14 +193,13 @@ class CampsiteSpider(CrawlSpider):
             index = index + 1
         return reservations
 
-    def after_set_park_facility(self, response):
-        # step 6: get campsites by click facility
-        yield FormRequest(url=unique_url(self.url_advance_search),
-                          meta={'cookiejar': response.meta['cookiejar'],
-                                'FacilityId': response.meta['formData']['ctl01$mainContent$hdnFacilityid'],
-                                'PlaceId': response.meta['formData']['ctl01$mainContent$hdnPlaceid']},
-                          formdata=response.meta['formData'],
-                          callback=self.parse_campsite_list)
+    def save_reservations_html(self, response, place_id, facility_id):
+        if not self.get_env("DEBUG"):
+            return
+        url = ('receives/result_reservations_%s_%s.html' % (place_id, facility_id))
+        f = open(url, 'w')
+        f.write(codecs.decode(response.body, 'utf8'))
+        f.close()
 
     def save_campsite_list_html(self, response):
         if not self.get_env("DEBUG"):
@@ -346,6 +356,12 @@ class CampsiteSpider(CrawlSpider):
                       callback=self.set_select_park)
 
     def start_requests(self):
+        if self.get_env("DEBUG"):
+            receives_dir = './receives'
+            if os.path.exists(receives_dir):
+                shutil.rmtree(receives_dir)
+            os.makedirs(receives_dir)
+
         while len(self.scrawl_parks):
             park = self.scrawl_parks.pop()
             # step 1: Go to reserve california home page
