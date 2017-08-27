@@ -4,7 +4,7 @@ import re
 from urllib.parse import urlparse, parse_qs
 import logging
 from scrapy.spiders import CrawlSpider
-from scrapy.http import Request, HtmlResponse, FormRequest
+from scrapy.http import Request, FormRequest
 
 # Python 3
 import html
@@ -19,21 +19,25 @@ from reserve_america.items import ReservationItem, ParkItem, CampsiteItem, Camps
 from reserve_america.data_mapping import equal_campsite_detail_keys
 from reserve_america.park_list import ca_park_list
 
-from reserve_america.spiders.payload.post import park_post_body, post_body_park_info_by_name, advance_search_form
-
+from reserve_america.spiders.payload.post import park_post_body, post_body_park_info_by_name, advance_search_form, web_home, set_night_by_place_id_and_facility_id_on_unit_grid
 
 class CampsiteSpider(CrawlSpider):
     name = 'campsite-ca'
 
-    url = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetGoogleMapPlaceData'
-    url_advance_search = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx'
-    # use park name to get park information
-    url_get_park_info_by_name = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetCityPlacename'
+    # step 1: load default page. Create session Id. GET
     url_default = 'https://www.reservecalifornia.com/CaliforniaWebHome/Default.aspx'
-
+    # step 2: use park name to get park information. POST
+    url_get_park_info_by_name = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetCityPlacename'
+    # step 3: simulate click Go button
+    url_webhome = 'https://www.reservecalifornia.com/CaliforniaWebHome/'
+    # step 4: click reserve button for this park, first set night by placeId and facilityId
+    url_set_by_place_id_facility_id = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/SetNightByPlaceIdAndFacilityIdOnUnitGrid'
+    # step 5: click reserve button for this park, second set
+    url_get_google_map_place_data = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx/GetGoogleMapPlaceData'
+    # step 6: get campsite information by click facility.
+    url_advance_search = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/AdvanceSearch.aspx'
+    # step 7: get campsite information
     url_template_campsite = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/UnitDetailPopup.aspx?facility_id=%s&unit_id=%s&arrival_date=%s 12:00:00 AM&is_available=%s'
-    url_template = 'https://www.reserveamerica.com/campsiteCalendar.do?page=calendar&contractCode=%s&parkId=%d&calarvdate=%s&sitepage=true&startIdx=0'
-    url_template_reserve = 'https://www.reservecalifornia.com/CaliforniaWebHome/Facilities/UnitDetailPopup.aspx?facility_id=%d&unit_id=%d&arrival_date=%s 12:00:00 AM&dis=%s 12:00:00 AM&is_available=true'
 
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.basicConfig(
@@ -41,7 +45,7 @@ class CampsiteSpider(CrawlSpider):
         format=
         '%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
         datefmt='%a, %d %b %Y %H:%M:%S',
-        filename='reservation.log',
+        filename='campsiteca.log',
         filemode='w')
 
     scrawl_parks = ca_park_list
@@ -55,8 +59,8 @@ class CampsiteSpider(CrawlSpider):
 
     def __init__(self, *args, **kwargs):
         self.first_date = self.__offset_date(datetime.datetime.today(), 2)
-        self.cookie_index = 0
         self.cookie_park_index = 0
+        self.cookie_park_facility_index = 0
         super(CampsiteSpider, self).__init__(*args, **kwargs)
 
     def __get_status(self, status):
@@ -106,24 +110,37 @@ class CampsiteSpider(CrawlSpider):
             form_data = advance_search_form.copy()
             form_data['ctl01$mainContent$hdnFacilityid'] = str(facility['FacilityId'])
             form_data['ctl01$mainContent$hdnPlaceid'] = str(facility['PlaceId'])
-            form_data['ctl01$AdvanceMainSearch$hdnArrivalDate'] = date_str
-            form_data['ctl01$AdvanceMainSearch$txtArrivalDate'] = date_str
             form_data['ctl01$mainContent$txtDateRange'] = date_str
-            form_data['ctl01$mainContent$TopMenuMainSearch$txtTopArrivalDate'] = date_str
-            yield FormRequest(url=self.url_advance_search,
-                              meta={'cookiejar': self.cookie_index,
-                                    'cookieIndex': self.cookie_index,
-                                    'FacilityId': facility['FacilityId'],
-                                    'PlaceId': facility['PlaceId']},
-                              dont_filter=True,
-                              formdata=form_data,
-                              callback=self.parse_campsite_list)
-            self.cookie_index = self.cookie_index + 1
+
+            body = set_night_by_place_id_and_facility_id_on_unit_grid.copy()
+            body['placeId'] = facility['PlaceId']
+            body['facilityId'] = facility['FacilityId']
+            # step 4: click reserve button, first set night by place id and facility id
+            yield Request(url=self.url_set_by_place_id_facility_id,
+                          method="POST",
+                          body=json.dumps(body),
+                          meta={'cookiejar': self.cookie_park_facility_index,
+                                'formData': form_data},
+                          dont_filter=True,
+                          headers={'Content-Type': 'application/json; charset=UTF-8'},
+                          callback=self.after_set_park_facility
+                          )
+            self.cookie_park_facility_index = self.cookie_park_facility_index + 1
+
+    def after_set_park_facility(self, response):
+        url = self.url_advance_search + '?_=' + str(response.meta['cookiejar'])
+        # step 6: get campsites by click facility
+        yield FormRequest(url=url,
+                          meta={'cookiejar': response.meta['cookiejar'],
+                                'FacilityId': response.meta['formData']['ctl01$mainContent$hdnFacilityid'],
+                                'PlaceId': response.meta['formData']['ctl01$mainContent$hdnPlaceid']},
+                          formdata=response.meta['formData'],
+                          callback=self.parse_campsite_list)
 
     def save_campsite_list_html(self, response):
         if not self.get_env("DEBUG"):
             return
-        url = ('receives/result_campsites_%d_%d.html' % (response.meta['PlaceId'], response.meta['FacilityId']))
+        url = ('receives/result_campsites_%s_%s.html' % (str(response.meta['PlaceId']), str(response.meta['FacilityId'])))
         f = open(url, 'w')
         # f.write(str(response.body))
         f.write(codecs.decode(response.body, 'utf8'))
@@ -136,7 +153,7 @@ class CampsiteSpider(CrawlSpider):
         park = codecs.decode(response.body, 'utf8')
         # convert json string to JSon
         park_dict = json.loads(park)
-        url = 'receives/result_park_%d.json' % park_dict['d']['ListJsonPlaceInfos'][0]['PlaceId']
+        url = 'receives/result_park_%s.json' % str(park_dict['d']['ListJsonPlaceInfos'][0]['PlaceId'])
         f = open(url, 'w')
         f.write(json.dumps(park_dict))
         f.close()
@@ -156,10 +173,10 @@ class CampsiteSpider(CrawlSpider):
                                                 reservation_item['siteId'],
                                                 reservation_item['date'],
                                                 is_available)
+            # step 7: get each campsite information
             yield Request(
                 url=url,
-                meta={'cookiejar': response.meta['cookieIndex'],
-                      'cookieIndex': response.meta['cookieIndex'],
+                meta={'cookiejar': response.meta['cookiejar'],
                       'FacilityId': response.meta['FacilityId'],
                       'PlaceId': response.meta['PlaceId'],
                       'SiteId': reservation_item['siteId']},
@@ -236,11 +253,12 @@ class CampsiteSpider(CrawlSpider):
         body['googlePlaceSearchParameters']['Latitude'] = str(park['Latitude'])
         body['googlePlaceSearchParameters']['Longitude'] = str(park['Longitude'])
         body['googlePlaceSearchParameters']['MapboxPlaceid'] = str(park['CityParkId'])
-        yield Request(url=self.url,
+        # step 5: click reserve button, get google map place data
+        yield Request(url=self.url_get_google_map_place_data,
                       method="POST",
                       meta={'cookiejar': response.meta['cookiejar']},
                       body=json.dumps(body),
-                      headers={'Content-Type': 'application/json'},
+                      headers={'Content-Type': 'application/json; charset=UTF-8'},
                       dont_filter=True,
                       callback=self.parse_park)
 
@@ -251,52 +269,62 @@ class CampsiteSpider(CrawlSpider):
                       dont_filter=True,
                       callback=self.home_page)
 
+    def after_click_reserve_set_night_by_place_id_and_facility_id(self, response):
+        body = set_night_by_place_id_and_facility_id_on_unit_grid.copy()
+        body['placeId'] = response.meta['park']['CityParkId']
+        url = self.url_set_by_place_id_facility_id+"?_="+str(response.meta['cookiejar'])
+
+        # step 4: click reserve button, first set night by place id and facility id
+        yield Request(url=url,
+                      method="POST",
+                      body=json.dumps(body),
+                      meta={'cookiejar': response.meta['cookiejar'],
+                            'park': response.meta['park']},
+                      dont_filter=True,
+                      headers={'Content-Type': 'application/json; charset=UTF-8'},
+                      callback=self.home_page
+                      )
+
     def set_select_park(self, response):
         body = codecs.decode(response.body, 'utf8')
         parks = json.loads(body)
         park = parks['d'][0]
-        body = park_post_body.copy()
-        body['googlePlaceSearchParameters']['Latitude'] = str(park['Latitude'])
-        body['googlePlaceSearchParameters']['Longitude'] = str(park['Longitude'])
-        body['googlePlaceSearchParameters']['MapboxPlaceid'] = str(park['CityParkId'])
-
-        yield Request(url=self.url_default,
-                      meta={'cookiejar': response.meta['cookiejar'],
+        body = web_home.copy()
+        date_str = self.first_date.strftime('%m/%d/%Y')
+        body['ctl00$ctl00$mainContent$txtArrivalDate'] = date_str
+        body['ctl00$ctl00$mainContent$hdnMasterPlaceId'] = str(park['CityParkId'])
+        url = self.url_webhome+"?_="+str(response.meta['cookiejar'])
+        # step 3: set select park
+        yield FormRequest(url=url,
+                          meta={'cookiejar': response.meta['cookiejar'],
                             'park':park},
-                      method="POST",
-                      body=json.dumps(body),
-                      headers={'Content-Type': 'application/json'},
-                      dont_filter=True,
-                      callback=self.park_info)
+                          method="POST",
+                          formdata=body,
+                          dont_filter=True,
+                          callback=self.after_click_reserve_set_night_by_place_id_and_facility_id)
 
     def index_page(self,response):
-
+        body = post_body_park_info_by_name.copy()
+        body['name'] = response.meta['parkName']
+        # step 2: use park name get park information
         yield Request(url=self.url_get_park_info_by_name,
                       meta={'cookiejar': response.meta['cookiejar']},
                       method="POST",
-                      body=json.dumps(response.meta['park']),
-                      headers={'Content-Type': 'application/json'},
+                      body=json.dumps(body),
+                      headers={'Content-Type': 'application/json; charset=UTF-8'},
                       dont_filter=True,
                       callback=self.set_select_park)
 
     def start_requests(self):
         while len(self.scrawl_parks):
             park = self.scrawl_parks.pop()
-            body = post_body_park_info_by_name.copy()
-            body['name'] = park['name']
+            # step 1: Go to reserve california home page
             yield Request(url=self.url_default,
                           meta={
                               'cookiejar': self.cookie_park_index,
-                              'park': body
+                              'parkName': park['name']
                           },
                           dont_filter=True,
                           callback=self.index_page)
             self.cookie_park_index = self.cookie_park_index + 1
-            # yield Request(url=self.url_get_park_info_by_name,
-            #               meta={'cookiejar': self.cookie_park_index},
-            #               method="POST",
-            #               body=json.dumps(body),
-            #               headers={'Content-Type': 'application/json'},
-            #               dont_filter=True,
-            #               callback=self.park_info)
 

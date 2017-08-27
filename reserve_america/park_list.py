@@ -23,9 +23,18 @@ park_list = [
 
 ca_park_list = [
     {
+        "name": "Henry Cowell Redwoods SP"
+    }
+]
+
+ca_park_list3 = [
+    {
+        "name": "Big Basin Redwoods SP Tent Cabins"
+    },
+    {
         "name": "Big Basin Redwoods SP"
     },
     {
-        "name": "Big Basin Redwoods SP Tent Cabins"
+        "name": "Henry Cowell Redwoods SP"
     }
 ]
