@@ -266,8 +266,8 @@ class CampsiteSpider(CrawlSpider):
         # parse unit detail
         while len(campsite_detail_units):
             unit = campsite_detail_units.pop()
-            key = unit.xpath('text()').extract_first()
-            value = unit.xpath('b/text()').extract_first()
+            key = unit.xpath('text()').extract_first().strip()
+            value = unit.xpath('b/text()').extract_first().strip()
             key = strings.snake_case(key)
             if key in campsite_detail_item.fields:
                 campsite_detail_item[key] = value
@@ -280,8 +280,8 @@ class CampsiteSpider(CrawlSpider):
         campsite_detail_amenities = response.xpath('//div[@id="pnlAmenities"]/ul/li')
         while len(campsite_detail_amenities):
             amenity = campsite_detail_amenities.pop()
-            key = amenity.xpath('text()').extract_first()
-            value = amenity.xpath('b/text()').extract_first()
+            key = amenity.xpath('text()').extract_first().strip()
+            value = amenity.xpath('b/text()').extract_first().strip()
             key = strings.snake_case(key)
             if key in campsite_detail_item.fields:
                 campsite_detail_item[key] = value

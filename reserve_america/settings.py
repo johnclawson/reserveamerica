@@ -31,7 +31,7 @@ ITEM_PIPELINES = {
     'reserve_america.pipelines.MongoDBPipleline': 300,
 }
 
-LOG_ENABLED=False
+LOG_ENABLED=True
 
 COOKIES_DEBUG = True
 
