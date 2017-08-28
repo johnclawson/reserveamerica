@@ -28,40 +28,52 @@ ca_park_list1 = [
 ]
 
 ca_park_list = [
-    {
-        "name": "Big Basin Redwoods SP Tent Cabins"
-    },
-    {
-        "name": "Big Basin Redwoods SP"
-    },
-    {
-        "name": "Henry Cowell Redwoods SP"
-    },
-    {
-        "name": "Portola Redwoods SP"
-    },
-    {
-        "name": "Butano SP"
-    },
-    {
-        "name": "Little Basin State Park"
-    },
-    {
-        "name": "Henry W Coe SP"
-    },
-    {
-        "name": "Half Moon Bay SB"
-    },
-    {
-        "name": "Mount Diablo SP"
-    },
-    {
-        "name": "China Camp SP"
-    },
-    {
-        "name": "Samuel P. Taylor SP"
-    },
-    {
-        "name": "Sugarloaf Ridge SP"
-    }
+    [
+        {
+            "name": "Big Basin Redwoods SP Tent Cabins"
+        },
+        {
+            "name": "Big Basin Redwoods SP"
+        }
+    ],
+    [
+        {
+            "name": "Henry Cowell Redwoods SP"
+        },
+        {
+            "name": "Portola Redwoods SP"
+        }
+    ],
+    [
+        {
+            "name": "Butano SP"
+        },
+        {
+            "name": "Little Basin State Park"
+        }
+    ],
+    [
+        {
+            "name": "Henry W Coe SP"
+        },
+        {
+            "name": "Half Moon Bay SB"
+        }
+    ],
+    [
+        {
+            "name": "Mount Diablo SP"
+        },
+        {
+            "name": "China Camp SP"
+        }
+    ],
+    [
+        {
+            "name": "Samuel P. Taylor SP"
+        },
+        {
+            "name": "Sugarloaf Ridge SP"
+        }
+    ]
 ]

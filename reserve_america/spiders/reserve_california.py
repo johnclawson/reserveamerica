@@ -48,8 +48,6 @@ class CampsiteSpider(CrawlSpider):
     #     filename='reserve_california.log',
     #     filemode='w')
 
-    scrawl_parks = ca_park_list
-
     STATUSES = {
         'a': 'a',
         'w': 'w',
@@ -362,8 +360,10 @@ class CampsiteSpider(CrawlSpider):
                 shutil.rmtree(receives_dir)
             os.makedirs(receives_dir)
 
-        while len(self.scrawl_parks):
-            park = self.scrawl_parks.pop()
+        scrawl_parks = ca_park_list[int(self.get_env("PARK_LIST_INDEX"))]
+
+        while len(scrawl_parks):
+            park = scrawl_parks.pop()
             # step 1: Go to reserve california home page
             yield Request(url=unique_url(self.url_default),
                           meta={
