@@ -72,7 +72,7 @@ park_post_body_full = {
 campsites_reservations_post_body = {
     "FacilityId": 332,
     "PlaceId": 3,
-    "MaximumDates": 180,
+    "MaximumDates": 120,
     "IsTablet": True,
     "MaximumStayforGrid": 1
 }
