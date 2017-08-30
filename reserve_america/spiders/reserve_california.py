@@ -102,36 +102,37 @@ class CampsiteSpider(CrawlSpider):
         while len(facility_infos):
             facility = facility_infos.pop()
 
-            body = set_night_by_place_id_and_facility_id_on_unit_grid.copy()
-            body['placeId'] = facility['PlaceId']
-            body['facilityId'] = facility['FacilityId']
-            self.cookie_index = self.cookie_index + 1
-            # step 4: click reserve button, first set night by place id and facility id
-            yield Request(url=unique_url(self.url_set_by_place_id_facility_id),
-                          method="POST",
-                          body=json.dumps(body),
-                          meta={'cookiejar': self.cookie_index,
-                                'FacilityId': facility['FacilityId'],
-                                'PlaceId': facility['PlaceId']},
-                          dont_filter=True,
-                          headers={'Content-Type': 'application/json; charset=UTF-8'},
-                          callback=self.after_set_park_facility
-                          )
-
-            campsite_list_body = campsites_reservations_post_body.copy()
-            campsite_list_body['FacilityId'] = facility['FacilityId']
-            campsite_list_body['PlaceId'] = facility['PlaceId']
-            # step 7: get campsites reservations in each campsite group
-            # yield Request(url=unique_url(self.url_campsites_reservations),
-            yield Request(url=unique_url(self.url_campsites_reservations),
-                          method="POST",
-                          meta={'cookiejar': response.meta['cookiejar'],
-                                'FacilityId': facility['FacilityId'],
-                                'PlaceId': facility['PlaceId']},
-                          body=json.dumps(campsite_list_body),
-                          dont_filter=True,
-                          headers={'Content-Type': 'application/json'},
-                          callback=self.parse_campsites_reservations)
+            if not self.get_env("CA_NOT_CRAWL_CAMPSITES"):
+                body = set_night_by_place_id_and_facility_id_on_unit_grid.copy()
+                body['placeId'] = facility['PlaceId']
+                body['facilityId'] = facility['FacilityId']
+                self.cookie_index = self.cookie_index + 1
+                # step 4: click reserve button, first set night by place id and facility id
+                yield Request(url=unique_url(self.url_set_by_place_id_facility_id),
+                              method="POST",
+                              body=json.dumps(body),
+                              meta={'cookiejar': self.cookie_index,
+                                    'FacilityId': facility['FacilityId'],
+                                    'PlaceId': facility['PlaceId']},
+                              dont_filter=True,
+                              headers={'Content-Type': 'application/json; charset=UTF-8'},
+                              callback=self.after_set_park_facility
+                              )
+            if not self.get_env("CA_NOT_CRAWL_RESERVATIONS"):
+                campsite_list_body = campsites_reservations_post_body.copy()
+                campsite_list_body['FacilityId'] = facility['FacilityId']
+                campsite_list_body['PlaceId'] = facility['PlaceId']
+                # step 7: get campsites reservations in each campsite group
+                # yield Request(url=unique_url(self.url_campsites_reservations),
+                yield Request(url=unique_url(self.url_campsites_reservations),
+                              method="POST",
+                              meta={'cookiejar': response.meta['cookiejar'],
+                                    'FacilityId': facility['FacilityId'],
+                                    'PlaceId': facility['PlaceId']},
+                              body=json.dumps(campsite_list_body),
+                              dont_filter=True,
+                              headers={'Content-Type': 'application/json'},
+                              callback=self.parse_campsites_reservations)
 
     def after_set_park_facility(self, response):
         # step 6: get campsites by click facility
@@ -353,6 +354,14 @@ class CampsiteSpider(CrawlSpider):
                       dont_filter=True,
                       callback=self.set_select_park)
 
+    def get_crawl_parks(self):
+        parks = []
+        indexs = self.get_env("PARK_LIST_INDEX") or '0'
+        indexs = indexs.split(',')
+        while len(indexs):
+            parks = parks+ca_park_list[int(indexs.pop())]
+        return parks
+
     def start_requests(self):
         if self.get_env("DEBUG"):
             receives_dir = './receives'
@@ -360,7 +369,7 @@ class CampsiteSpider(CrawlSpider):
                 shutil.rmtree(receives_dir)
             os.makedirs(receives_dir)
 
-        crawl_parks = ca_park_list[int(self.get_env("PARK_LIST_INDEX"))]
+        crawl_parks = self.get_crawl_parks()
 
         logging.debug("=======================================")
         logging.debug("crawl_parks: %s", json.dumps(crawl_parks))
